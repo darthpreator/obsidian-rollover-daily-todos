@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { getTodos } from "./get-todos";
+import { getTodos, getTodosWithSections } from "./get-todos";
 
 test("single todo element should return itself", () => {
   // GIVEN
@@ -534,4 +534,186 @@ test("should not match malformed todos", () => {
   ];
   const todos = getTodos({ lines });
   expect(todos).toStrictEqual(["- [ ] valid todo"]);
+});
+
+test("getTodosWithSections groups todos by section headers", () => {
+  // GIVEN
+  const lines = [
+    "## project 1",
+    "- [x] task 1",
+    "- [ ] task 2",
+    "",
+    "## project 2",
+    "- [ ] task 3",
+  ];
+
+  // WHEN
+  const sections = getTodosWithSections({ lines });
+
+  // THEN
+  expect(sections).toStrictEqual([
+    {
+      heading: "## project 1",
+      todos: ["- [ ] task 2"],
+    },
+    {
+      heading: "## project 2",
+      todos: ["- [ ] task 3"],
+    },
+  ]);
+});
+
+test("getTodosWithSections handles todos without sections", () => {
+  // GIVEN
+  const lines = [
+    "- [ ] task 1",
+    "- [x] task 2",
+    "- [ ] task 3",
+  ];
+
+  // WHEN
+  const sections = getTodosWithSections({ lines });
+
+  // THEN
+  expect(sections).toStrictEqual([
+    {
+      heading: null,
+      todos: ["- [ ] task 1", "- [ ] task 3"],
+    },
+  ]);
+});
+
+test("getTodosWithSections handles mixed content", () => {
+  // GIVEN
+  const lines = [
+    "Some intro text",
+    "- [ ] task 1",
+    "",
+    "## Section 1",
+    "Some text",
+    "- [ ] task 2",
+    "- [x] task 3",
+    "",
+    "## Section 2",
+    "- [x] all done",
+    "",
+    "## Section 3",
+    "- [ ] task 4",
+  ];
+
+  // WHEN
+  const sections = getTodosWithSections({ lines });
+
+  // THEN
+  expect(sections).toStrictEqual([
+    {
+      heading: null,
+      todos: ["- [ ] task 1"],
+    },
+    {
+      heading: "## Section 1",
+      todos: ["- [ ] task 2"],
+    },
+    {
+      heading: "## Section 3",
+      todos: ["- [ ] task 4"],
+    },
+  ]);
+});
+
+test("getTodosWithSections with children", () => {
+  // GIVEN
+  const lines = [
+    "## Project A",
+    "- [ ] Main task",
+    "    - [ ] Subtask 1",
+    "    - some note",
+    "- [x] Done task",
+    "    - child of done",
+    "",
+    "## Project B",
+    "- [ ] Another task",
+    "    - nested item",
+  ];
+
+  // WHEN
+  const sections = getTodosWithSections({ lines, withChildren: true });
+
+  // THEN
+  expect(sections).toStrictEqual([
+    {
+      heading: "## Project A",
+      todos: [
+        "- [ ] Main task",
+        "    - [ ] Subtask 1",
+        "    - some note",
+      ],
+    },
+    {
+      heading: "## Project B",
+      todos: [
+        "- [ ] Another task",
+        "    - nested item",
+      ],
+    },
+  ]);
+});
+
+test("getTodosWithSections ignores level 1 headings", () => {
+  // GIVEN
+  const lines = [
+    "# Main Title",
+    "- [ ] task 1",
+    "",
+    "## Section 1",
+    "- [ ] task 2",
+  ];
+
+  // WHEN
+  const sections = getTodosWithSections({ lines });
+
+  // THEN
+  expect(sections).toStrictEqual([
+    {
+      heading: null,
+      todos: ["- [ ] task 1"],
+    },
+    {
+      heading: "## Section 1",
+      todos: ["- [ ] task 2"],
+    },
+  ]);
+});
+
+test("getTodosWithSections handles nested headings", () => {
+  // GIVEN
+  const lines = [
+    "## Level 2",
+    "- [ ] task 1",
+    "",
+    "### Level 3",
+    "- [ ] task 2",
+    "",
+    "## Another Level 2",
+    "- [ ] task 3",
+  ];
+
+  // WHEN
+  const sections = getTodosWithSections({ lines });
+
+  // THEN
+  expect(sections).toStrictEqual([
+    {
+      heading: "## Level 2",
+      todos: ["- [ ] task 1"],
+    },
+    {
+      heading: "### Level 3",
+      todos: ["- [ ] task 2"],
+    },
+    {
+      heading: "## Another Level 2",
+      todos: ["- [ ] task 3"],
+    },
+  ]);
 });
