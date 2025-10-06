@@ -37,7 +37,9 @@ If you prefer to trigger the rollover of your todos manually, you can use this s
 
 ### 2. Template Heading
 
-If you chose a template file to use for new daily notes in `Daily notes > Settings` or `Periodic Notes > Settings`, you will be able to choose a heading for incomplete notes to roll into. Note that incomplete todos are taken from the entire file, regardless of what heading they are under. And they are all rolled into today's daily note, right under the heading of choice.
+If you chose a template file to use for new daily notes in `Daily notes > Settings` or `Periodic Notes > Settings`, you will be able to choose a heading for incomplete notes to roll into.
+
+When "Preserve section headers" is enabled, todos are grouped by their section headers from the previous note, and all sections are placed under the template heading. When "Preserve section headers" is disabled, todos are taken from the entire file regardless of their original headings, and they are all rolled into today's daily note right under the heading of choice.
 
 If you leave this field as blank, or select `None`, then incomplete todos will be rolled onto the end of today's note (for new notes with no template, the end is the beginning of the note).
 
@@ -55,7 +57,32 @@ By default, this plugin will roll over anything that has a checkbox, whether it 
 
 By default, only the actual todos are rolled over. If you add nested Markdown elements beneath your todos, these are not rolled over but stay in place. Toggling this setting on allows for also migrating the nested elements, including ones that are completed.
 
-### 6. Done status markers
+### 6. Preserve section headers
+
+When enabled (default), the plugin will maintain section headers (level 2+ headings like `## Project Name`) from the previous daily note and keep todos organized under their respective sections. 
+
+For example, if your previous daily note looks like:
+```markdown
+## project 1
+- [x] task 1
+- [ ] task 2
+
+## project 2
+- [ ] task 3
+```
+
+The new note will look like:
+```markdown
+## project 1
+- [ ] task 2
+
+## project 2
+- [ ] task 3
+```
+
+Sections with only completed tasks are automatically excluded. This feature works together with the "Template heading" setting - if you specify a template heading, all sections will be placed under that heading. If disabled, todos are rolled over without their section headers (original behavior).
+
+### 7. Done status markers
 
 By default, the plugin considers checkboxes containing 'x', 'X', or '-' as completed tasks that won't be rolled over. You can customize this by adding any characters that should be considered "done" markers. For example, adding '?+>' would also treat checkboxes like '[?]', '[+]', and '[>]' as completed tasks. This is useful for users of custom status markers like the [Obsidian Tasks](https://publish.obsidian.md/tasks/Introduction) plugin.
 
