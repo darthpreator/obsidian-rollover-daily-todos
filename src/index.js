@@ -6,7 +6,7 @@ import {
 } from "obsidian-daily-notes-interface";
 import UndoModal from "./ui/UndoModal";
 import RolloverSettingTab from "./ui/RolloverSettingTab";
-import { getTodos } from "./get-todos";
+import { getTodos, getTodosWithSections } from "./get-todos";
 
 const MAX_TIME_SINCE_CREATION = 5000; // 5 seconds
 
@@ -48,6 +48,7 @@ export default class RolloverTodosPlugin extends Plugin {
       rolloverOnFileCreate: true,
       doneStatusMarkers: "xX-",
       leadingNewLine: true,
+      preserveSectionHeaders: true,
     };
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
@@ -132,6 +133,17 @@ export default class RolloverTodosPlugin extends Plugin {
     });
   }
 
+  async getAllUnfinishedTodosWithSections(file) {
+    const dn = await this.app.vault.read(file);
+    const dnLines = dn.split(/\r?\n|\r|\n/g);
+
+    return getTodosWithSections({
+      lines: dnLines,
+      withChildren: this.settings.rolloverChildren,
+      doneStatusMarkers: this.settings.doneStatusMarkers,
+    });
+  }
+
   async sortHeadersIntoHierarchy(file) {
     ///console.log('testing')
     const templateContents = await this.app.vault.read(file);
@@ -198,7 +210,7 @@ export default class RolloverTodosPlugin extends Plugin {
         10000
       );
     } else {
-      const { templateHeading, deleteOnComplete, removeEmptyTodos, leadingNewLine } =
+      const { templateHeading, deleteOnComplete, removeEmptyTodos, leadingNewLine, preserveSectionHeaders } =
         this.settings;
 
       // check if there is a daily note from yesterday
@@ -209,7 +221,17 @@ export default class RolloverTodosPlugin extends Plugin {
       //this.sortHeadersIntoHierarchy(lastDailyNote)
 
       // get unfinished todos from yesterday, if exist
-      let todos_yesterday = await this.getAllUnfinishedTodos(lastDailyNote);
+      let todos_yesterday;
+      let sections_yesterday = [];
+      let useSectionBasedRollover = preserveSectionHeaders;
+      
+      if (useSectionBasedRollover) {
+        sections_yesterday = await this.getAllUnfinishedTodosWithSections(lastDailyNote);
+        // Flatten sections to get all todos for counting
+        todos_yesterday = sections_yesterday.flatMap(section => section.todos);
+      } else {
+        todos_yesterday = await this.getAllUnfinishedTodos(lastDailyNote);
+      }
 
       console.log(
         `rollover-daily-todos: ${todos_yesterday.length} todos found in ${lastDailyNote.basename}.md`
@@ -234,19 +256,53 @@ export default class RolloverTodosPlugin extends Plugin {
       // Potentially filter todos from yesterday for today
       let todosAdded = 0;
       let emptiesToNotAddToTomorrow = 0;
-      let todos_today = !removeEmptyTodos ? todos_yesterday : [];
-      if (removeEmptyTodos) {
-        todos_yesterday.forEach((line, i) => {
-          const trimmedLine = (line || "").trim();
-          if (trimmedLine != "- [ ]" && trimmedLine != "- [  ]") {
-            todos_today.push(line);
-            todosAdded++;
+      let todos_today = [];
+      let sections_today = [];
+      
+      if (useSectionBasedRollover) {
+        // Filter empty todos from each section
+        sections_today = sections_yesterday.map(section => {
+          let filteredTodos = section.todos;
+          
+          if (removeEmptyTodos) {
+            filteredTodos = section.todos.filter(line => {
+              const trimmedLine = (line || "").trim();
+              if (trimmedLine != "- [ ]" && trimmedLine != "- [  ]") {
+                todosAdded++;
+                return true;
+              } else {
+                emptiesToNotAddToTomorrow++;
+                return false;
+              }
+            });
           } else {
-            emptiesToNotAddToTomorrow++;
+            todosAdded += section.todos.length;
           }
-        });
+          
+          return {
+            heading: section.heading,
+            todos: filteredTodos,
+          };
+        }).filter(section => section.todos.length > 0); // Only keep sections with todos
+        
+        // Flatten for compatibility with existing code
+        todos_today = sections_today.flatMap(section => section.todos);
       } else {
-        todosAdded = todos_yesterday.length;
+        // Original behavior
+        todos_today = !removeEmptyTodos ? todos_yesterday : [];
+        if (removeEmptyTodos) {
+          todos_yesterday.forEach((line, i) => {
+            const trimmedLine = (line || "").trim();
+            if (trimmedLine != "- [ ]" && trimmedLine != "- [  ]") {
+              todos_today.push(line);
+              todosAdded++;
+            } else {
+              emptiesToNotAddToTomorrow++;
+            }
+          });
+        } else {
+          todosAdded = todos_yesterday.length;
+        }
       }
 
       // get today's content and modify it
@@ -259,7 +315,24 @@ export default class RolloverTodosPlugin extends Plugin {
           file: file,
           oldContent: `${dailyNoteContent}`,
         };
-        const todos_todayString = `\n${todos_today.join("\n")}`;
+        
+        let todos_todayString;
+        
+        if (useSectionBasedRollover) {
+          // Build the content with sections
+          const sectionsContent = sections_today.map(section => {
+            const lines = [];
+            if (section.heading) {
+              lines.push(section.heading);
+            }
+            lines.push(...section.todos);
+            return lines.join("\n");
+          }).join("\n\n");
+          
+          todos_todayString = `\n${sectionsContent}`;
+        } else {
+          todos_todayString = `\n${todos_today.join("\n")}`;
+        }
 
         // If template heading is selected, try to rollover to template heading
         if (templateHeadingSelected) {

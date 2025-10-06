@@ -95,6 +95,25 @@ export default class RolloverSettingTab extends PluginSettingTab {
       );
 
     new Setting(this.containerEl)
+      .setName("Preserve section headers")
+      .setDesc(
+        `Maintain section headers (## headings) from the previous daily note and keep todos organized under their respective sections. When enabled, todos will be grouped by their section headers when rolled over.`
+      )
+      .addToggle((toggle) =>
+        toggle
+          .setValue(
+            this.plugin.settings.preserveSectionHeaders === undefined ||
+              this.plugin.settings.preserveSectionHeaders === null
+              ? true
+              : this.plugin.settings.preserveSectionHeaders
+          )
+          .onChange((value) => {
+            this.plugin.settings.preserveSectionHeaders = value;
+            this.plugin.saveSettings();
+          })
+      );
+
+    new Setting(this.containerEl)
       .setName("Automatic rollover on daily note open")
       .setDesc(
         `If enabled, the plugin will automatically rollover todos when you open a daily note.`

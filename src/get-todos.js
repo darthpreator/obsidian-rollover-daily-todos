@@ -79,6 +79,11 @@ class TodoParser {
     return !hasDoneMarker;
   }
 
+  // Public method to check if a line is a todo
+  isTodo(s) {
+    return this.#isTodo(s);
+  }
+
   // Returns true if line after line-number `l` is a nested item
   #hasChildren(l) {
     if (l + 1 >= this.#lines.length) {
@@ -142,4 +147,75 @@ export const getTodos = ({
 }) => {
   const todoParser = new TodoParser(lines, withChildren, doneStatusMarkers);
   return todoParser.getTodos();
+};
+
+// Extract todos grouped by their section headers
+export const getTodosWithSections = ({
+  lines,
+  withChildren = false,
+  doneStatusMarkers = null,
+}) => {
+  const todoParser = new TodoParser(lines, withChildren, doneStatusMarkers);
+  const sections = [];
+  let currentSection = null;
+  let currentSectionTodos = [];
+  
+  for (let l = 0; l < lines.length; l++) {
+    const line = lines[l];
+    
+    // Check if this line is a heading (## or more)
+    const headingMatch = line.match(/^(#{2,})\s+(.+)$/);
+    if (headingMatch) {
+      // Save previous section if it has todos
+      if (currentSectionTodos.length > 0) {
+        sections.push({
+          heading: currentSection,
+          todos: currentSectionTodos,
+        });
+      }
+      // Start new section
+      currentSection = line;
+      currentSectionTodos = [];
+      continue;
+    }
+    
+    // Check if this line is a todo
+    if (todoParser.isTodo(line)) {
+      const todoLines = [line];
+      
+      // If we need to include children, get them manually
+      if (withChildren) {
+        let childIdx = l + 1;
+        const parentIndent = line.search(/\S/);
+        
+        while (childIdx < lines.length) {
+          const childLine = lines[childIdx];
+          const childIndent = childLine.search(/\S/);
+          
+          // If the next line has more indentation, it's a child
+          if (childIndent > parentIndent && childIndent >= 0) {
+            todoLines.push(childLine);
+            childIdx++;
+          } else {
+            break;
+          }
+        }
+        
+        // Skip the children we just processed
+        l = childIdx - 1;
+      }
+      
+      currentSectionTodos.push(...todoLines);
+    }
+  }
+  
+  // Don't forget the last section
+  if (currentSectionTodos.length > 0) {
+    sections.push({
+      heading: currentSection,
+      todos: currentSectionTodos,
+    });
+  }
+  
+  return sections;
 };
